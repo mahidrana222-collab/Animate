@@ -607,4 +607,544 @@ local function BuildUI()
 	btnDown.Size = UDim2.new(1, 0, 0, 45)
 	btnDown.Position = UDim2.new(0, 0, 0, 55)
 	btnDown.BackgroundColor3 = Color3.fromRGB(35, 40, 50)
-	btnDow
+	btnDown.BackgroundTransparency = 0.3
+	btnDown.Text = "DN"
+	btnDown.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btnDown.Font = Enum.Font.GothamBold
+	btnDown.TextSize = 12
+	btnDown.ZIndex = 10
+	btnDown.Parent = vertFrame
+	Instance.new("UICorner", btnDown).CornerRadius = UDim.new(0, 8)
+
+	local function BindHold(btn: TextButton, moveDir: Vector3)
+		btn.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+				PovMoveVector = PovMoveVector + moveDir
+			end
+		end)
+		btn.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+				PovMoveVector = PovMoveVector - moveDir
+			end
+		end)
+	end
+
+	BindHold(btnFwd, Vector3.new(0, 0, -1))
+	BindHold(btnBack, Vector3.new(0, 0, 1))
+	BindHold(btnLeft, Vector3.new(-1, 0, 0))
+	BindHold(btnRight, Vector3.new(1, 0, 0))
+	BindHold(btnUp, Vector3.new(0, 1, 0))
+	BindHold(btnDown, Vector3.new(0, -1, 0))
+
+	PlaybackOverlay = Instance.new("Frame")
+	PlaybackOverlay.Name = "PlaybackOverlay"
+	PlaybackOverlay.Size = UDim2.new(1, 0, 1, 0)
+	PlaybackOverlay.BackgroundTransparency = 1
+	PlaybackOverlay.Visible = false
+	PlaybackOverlay.Parent = ScreenGui
+
+	local btnClosePlayback = Instance.new("TextButton")
+	btnClosePlayback.Name = "BtnClosePlayback"
+	btnClosePlayback.Size = UDim2.new(0, 42, 0, 42)
+	btnClosePlayback.Position = UDim2.new(0, 15, 0, 15)
+	btnClosePlayback.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+	btnClosePlayback.Text = "✕"
+	btnClosePlayback.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btnClosePlayback.Font = Enum.Font.GothamBold
+	btnClosePlayback.TextSize = 20
+	btnClosePlayback.Parent = PlaybackOverlay
+	Instance.new("UICorner", btnClosePlayback).CornerRadius = UDim.new(0, 10)
+
+	btnClosePlayback.Activated:Connect(function()
+		StopCinematic()
+	end)
+
+	local function ToggleDotSelection(index: number)
+		if SelectedIndices[index] then
+			SelectedIndices[index] = nil
+		else
+			SelectedIndices[index] = true
+		end
+	end
+
+	local function UpdateScrollList()
+		for _, child in ipairs(DotScrollList:GetChildren()) do
+			if child:IsA("TextButton") then
+				child:Destroy()
+			end
+		end
+
+		for i, kf in ipairs(Keyframes) do
+			local isSelected = SelectedIndices[i] == true
+			local dotBtn = Instance.new("TextButton")
+			dotBtn.Name = "DotItem_" .. i
+			dotBtn.Size = UDim2.new(1, 0, 0, 24)
+			dotBtn.Font = Enum.Font.GothamBold
+			dotBtn.TextSize = 10
+			
+			local checkMark = isSelected and "[✓] " or "[   ] "
+			dotBtn.Text = string.format("  %sDot #%d (Spd: %.1f | Pause: %.1fs)", checkMark, i, kf.Speed, kf.StopTime)
+			dotBtn.TextXAlignment = Enum.TextXAlignment.Left
+
+			if isSelected then
+				dotBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+				dotBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			else
+				dotBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 40)
+				dotBtn.TextColor3 = Color3.fromRGB(220, 225, 235)
+			end
+
+			Instance.new("UICorner", dotBtn).CornerRadius = UDim.new(0, 5)
+
+			local targetIndex = i
+			dotBtn.Activated:Connect(function()
+				ToggleDotSelection(targetIndex)
+				RefreshUI()
+			end)
+
+			dotBtn.Parent = DotScrollList
+		end
+	end
+
+	local function RefreshUI()
+		local totalDots = #Keyframes
+		local selCount = GetSelectedCount()
+
+		lblInfo.Text = string.format("Total Dots: %d | Selected: %d", totalDots, selCount)
+
+		if selCount > 0 then
+			local selList = GetSelectedIndicesList()
+			local firstKF = Keyframes[selList[1]]
+			lblSpeed.Text = string.format("Speed: %.1f", firstKF.Speed)
+			lblPause.Text = string.format("Pause: %.1fs", firstKF.StopTime)
+		else
+			lblSpeed.Text = string.format("Speed: %.1f (Def)", DefaultSpeed)
+			lblPause.Text = string.format("Pause: %.1fs (Def)", DefaultStopTime)
+		end
+
+		for i, kf in ipairs(Keyframes) do
+			UpdateMarkerAppearance(kf, SelectedIndices[i] == true)
+		end
+
+		btnSelectAll.Text = (selCount == totalDots and totalDots > 0) and "DESELECT ALL" or "SELECT ALL"
+
+		btnPlacement.Text = (State == "PLACEMENT") and "PLACEMENT MODE: ON" or "PLACEMENT MODE: OFF"
+		btnPlacement.BackgroundColor3 = (State == "PLACEMENT") and Color3.fromRGB(0, 140, 200)
+			or Color3.fromRGB(45, 50, 60)
+
+		UpdateScrollList()
+	end
+
+	btnSelectAll.Activated:Connect(function()
+		local totalDots = #Keyframes
+		if totalDots == 0 then return end
+
+		if GetSelectedCount() == totalDots then
+			table.clear(SelectedIndices)
+		else
+			for i = 1, totalDots do
+				SelectedIndices[i] = true
+			end
+		end
+		RefreshUI()
+	end)
+
+	headerClose.Activated:Connect(function()
+		if State == "PLACEMENT" then
+			State = "IDLE"
+			RefreshUI()
+		elseif State == "PLAYBACK" then
+			StopCinematic()
+		elseif State == "POV_EDIT" then
+			ExitPOVMode()
+		end
+	end)
+
+	btnClosePOV.Activated:Connect(function()
+		if State == "POV_EDIT" then
+			ExitPOVMode()
+		end
+	end)
+
+	btnDelete.Activated:Connect(function()
+		local selList = GetSelectedIndicesList()
+		if #selList == 0 then return end
+
+		for i = #selList, 1, -1 do
+			local idx = selList[i]
+			local kf = table.remove(Keyframes, idx)
+			if kf then
+				if kf.MarkerPart then kf.MarkerPart:Destroy() end
+				if kf.ArrowPart then kf.ArrowPart:Destroy() end
+			end
+		end
+
+		table.clear(SelectedIndices)
+		RefreshKeyframeIndices()
+		RefreshUI()
+	end)
+
+	btnClearAll.Activated:Connect(function()
+		ClearAllKeyframes()
+	end)
+
+	btnPlacement.Activated:Connect(function()
+		if State == "PLAYBACK" or State == "POV_EDIT" then
+			return
+		end
+		State = (State == "PLACEMENT") and "IDLE" or "PLACEMENT"
+		RefreshUI()
+	end)
+
+	btnSpeedMinus.Activated:Connect(function()
+		local selList = GetSelectedIndicesList()
+		if #selList > 0 then
+			for _, idx in ipairs(selList) do
+				Keyframes[idx].Speed = math.max(0.5, Keyframes[idx].Speed - 2.5)
+			end
+		else
+			DefaultSpeed = math.max(0.5, DefaultSpeed - 2.5)
+		end
+		RefreshUI()
+	end)
+
+	btnSpeedPlus.Activated:Connect(function()
+		local selList = GetSelectedIndicesList()
+		if #selList > 0 then
+			for _, idx in ipairs(selList) do
+				Keyframes[idx].Speed = math.min(500, Keyframes[idx].Speed + 2.5)
+			end
+		else
+			DefaultSpeed = math.min(500, DefaultSpeed + 2.5)
+		end
+		RefreshUI()
+	end)
+
+	btnPauseMinus.Activated:Connect(function()
+		local selList = GetSelectedIndicesList()
+		if #selList > 0 then
+			for _, idx in ipairs(selList) do
+				Keyframes[idx].StopTime = math.max(0, Keyframes[idx].StopTime - 0.5)
+			end
+		else
+			DefaultStopTime = math.max(0, DefaultStopTime - 0.5)
+		end
+		RefreshUI()
+	end)
+
+	btnPausePlus.Activated:Connect(function()
+		local selList = GetSelectedIndicesList()
+		if #selList > 0 then
+			for _, idx in ipairs(selList) do
+				Keyframes[idx].StopTime = math.min(3600, Keyframes[idx].StopTime + 0.5)
+			end
+		else
+			DefaultStopTime = math.min(3600, DefaultStopTime + 0.5)
+		end
+		RefreshUI()
+	end)
+
+	return {
+		RefreshUI = RefreshUI,
+		BtnPlay = btnPlay,
+		BtnStop = btnStop,
+		BtnPOV = btnPOV,
+	}
+end
+
+local UIControllers = BuildUI()
+
+ClearAllKeyframes = function()
+	for _, kf in ipairs(Keyframes) do
+		if kf.MarkerPart then kf.MarkerPart:Destroy() end
+		if kf.ArrowPart then kf.ArrowPart:Destroy() end
+	end
+	table.clear(Keyframes)
+	table.clear(SelectedIndices)
+	ClearPathBeams()
+	UIControllers.RefreshUI()
+end
+
+--------------------------------------------------------------------------------
+-- POV / REAL-TIME GROUP POSITION EDITING CONTROLLER
+--------------------------------------------------------------------------------
+local function UpdateSelectedDotsCFrame()
+	local newPrimaryCF = CurrentCamera.CFrame
+	for idx, relCF in pairs(PovRelativeOffsets) do
+		if Keyframes[idx] then
+			UpdateKeyframeTransform(Keyframes[idx], newPrimaryCF * relCF)
+		end
+	end
+	UpdatePathVisuals()
+end
+
+local function EnterPOVMode()
+	local selList = GetSelectedIndicesList()
+	if #selList == 0 or State == "PLAYBACK" then
+		return
+	end
+
+	State = "POV_EDIT"
+	MainFrame.Visible = false
+	POVOverlay.Visible = true
+
+	SetTouchControlsVisible(false)
+
+	PovPrimaryIdx = selList[1]
+	local primaryKF = Keyframes[PovPrimaryIdx]
+
+	CurrentCamera.CameraType = Enum.CameraType.Scriptable
+	CurrentCamera.CFrame = primaryKF.CFrame
+
+	table.clear(PovRelativeOffsets)
+	local primaryCF = primaryKF.CFrame
+	for _, idx in ipairs(selList) do
+		PovRelativeOffsets[idx] = primaryCF:ToObjectSpace(Keyframes[idx].CFrame)
+	end
+
+	local rx, ry, _ = primaryKF.CFrame:ToOrientation()
+	PovPitch = rx
+	PovYaw = ry
+	PovMoveVector = Vector3.zero
+
+	PovRenderConn = RunService.RenderStepped:Connect(function(dt)
+		if State ~= "POV_EDIT" then
+			return
+		end
+
+		if PovMoveVector.Magnitude > 0 then
+			local camCFrame = CurrentCamera.CFrame
+			local moveSpeed = 16.0 * dt
+			
+			local worldMove = (camCFrame.RightVector * PovMoveVector.X)
+				+ (Vector3.new(0, 1, 0) * PovMoveVector.Y)
+				+ (camCFrame.LookVector * (-PovMoveVector.Z))
+			
+			CurrentCamera.CFrame = camCFrame + (worldMove * moveSpeed)
+			UpdateSelectedDotsCFrame()
+		end
+	end)
+end
+
+POVTouchArea.InputChanged:Connect(function(input)
+	if State ~= "POV_EDIT" then
+		return
+	end
+
+	if
+		input.UserInputType == Enum.UserInputType.Touch
+		or input.UserInputType == Enum.UserInputType.MouseMovement
+	then
+		local delta = input.Delta
+		PovYaw = PovYaw - (delta.X * 0.005)
+		PovPitch = math.clamp(PovPitch - (delta.Y * 0.005), math.rad(-85), math.rad(85))
+
+		local currentPos = CurrentCamera.CFrame.Position
+		CurrentCamera.CFrame = CFrame.new(currentPos) * CFrame.Angles(0, PovYaw, 0) * CFrame.Angles(PovPitch, 0, 0)
+		UpdateSelectedDotsCFrame()
+	end
+end)
+
+ExitPOVMode = function()
+	if State ~= "POV_EDIT" then
+		return
+	end
+
+	if PovRenderConn then
+		PovRenderConn:Disconnect()
+		PovRenderConn = nil
+	end
+
+	State = "IDLE"
+	POVOverlay.Visible = false
+	MainFrame.Visible = true
+
+	SetTouchControlsVisible(true)
+
+	CurrentCamera.CameraType = Enum.CameraType.Custom
+	UIControllers.RefreshUI()
+end
+
+UIControllers.BtnPOV.Activated:Connect(function()
+	if State == "POV_EDIT" then
+		ExitPOVMode()
+	else
+		local selList = GetSelectedIndicesList()
+		if #selList > 0 then
+			EnterPOVMode()
+		else
+			-- If no dot is selected, set current camera position to all selected or place/align to current camera view
+			for i = 1, #Keyframes do
+				SelectedIndices[i] = true
+			end
+			UIControllers.RefreshUI()
+			EnterPOVMode()
+		end
+	end
+end)
+
+--------------------------------------------------------------------------------
+-- RAYCASTING & TOUCH KEYFRAME CREATION
+--------------------------------------------------------------------------------
+local function ProcessWorldTap(touchPos: Vector2)
+	local ray = CurrentCamera:ViewportPointToRay(touchPos.X, touchPos.Y)
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+
+	local ignoreList = { KeyframeFolder }
+	if LocalPlayer.Character then
+		table.insert(ignoreList, LocalPlayer.Character)
+	end
+	raycastParams.FilterDescendantsInstances = ignoreList
+
+	local result = Workspace:Raycast(ray.Origin, ray.Direction * 500, raycastParams)
+	local targetCFrame: CFrame
+
+	if result then
+		local targetPos = result.Position + (result.Normal * 0.5)
+		targetCFrame = CFrame.lookAt(targetPos, targetPos + ray.Direction)
+	else
+		local targetPos = ray.Origin + (ray.Direction * 25)
+		targetCFrame = CFrame.lookAt(targetPos, targetPos + ray.Direction)
+	end
+
+	local newIndex = #Keyframes + 1
+	local kf = CreateVisualMarker(targetCFrame, newIndex)
+	table.insert(Keyframes, kf)
+
+	table.clear(SelectedIndices)
+	SelectedIndices[newIndex] = true
+
+	RefreshKeyframeIndices()
+	UIControllers.RefreshUI()
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then
+		return
+	end
+
+	if
+		input.UserInputType == Enum.UserInputType.Touch
+		or input.UserInputType == Enum.UserInputType.MouseButton1
+	then
+		if State == "PLACEMENT" then
+			local tapPos = Vector2.new(input.Position.X, input.Position.Y)
+			ProcessWorldTap(tapPos)
+		end
+	end
+end)
+
+--------------------------------------------------------------------------------
+-- CINEMATIC PLAYBACK ENGINE
+--------------------------------------------------------------------------------
+local PlaybackThread: thread? = nil
+
+StopCinematic = function()
+	State = "IDLE"
+
+	if PlaybackThread then
+		task.cancel(PlaybackThread)
+		PlaybackThread = nil
+	end
+
+	CurrentCamera.CameraType = SavedCamType
+	CurrentCamera.CameraSubject = SavedCamSubject
+	CurrentCamera.CFrame = SavedCamCFrame
+
+	SetTouchControlsVisible(true)
+
+	SetVisualsVisible(true)
+	MainFrame.Visible = true
+	PlaybackOverlay.Visible = false
+	UIControllers.BtnStop.Visible = false
+	UIControllers.BtnPlay.Visible = true
+	UIControllers.RefreshUI()
+end
+
+local function StartCinematic()
+	if #Keyframes < 1 or State == "PLAYBACK" then
+		return
+	end
+
+	SavedCamCFrame = CurrentCamera.CFrame
+	SavedCamType = CurrentCamera.CameraType
+	SavedCamSubject = CurrentCamera.CameraSubject
+
+	State = "PLAYBACK"
+
+	SetTouchControlsVisible(false)
+
+	SetVisualsVisible(false)
+	MainFrame.Visible = false
+	PlaybackOverlay.Visible = true
+	UIControllers.BtnPlay.Visible = false
+	UIControllers.BtnStop.Visible = true
+
+	CurrentCamera.CameraType = Enum.CameraType.Scriptable
+
+	PlaybackThread = task.spawn(function()
+		CurrentCamera.CFrame = Keyframes[1].CFrame
+
+		for i = 1, #Keyframes - 1 do
+			if State ~= "PLAYBACK" then
+				break
+			end
+
+			local kfStart = Keyframes[i]
+			local kfEnd = Keyframes[i + 1]
+
+			local distance = (kfEnd.CFrame.Position - kfStart.CFrame.Position).Magnitude
+			local speed = math.max(kfStart.Speed, 0.01)
+			local travelDuration = distance / speed
+
+			local elapsed = 0
+			while elapsed < travelDuration do
+				if State ~= "PLAYBACK" then
+					return
+				end
+				local dt = RunService.RenderStepped:Wait()
+				elapsed += dt
+				local alpha = math.clamp(elapsed / travelDuration, 0, 1)
+
+				local smoothAlpha = TweenService:GetValue(
+					alpha,
+					Enum.EasingStyle.Quad,
+					Enum.EasingDirection.InOut
+				)
+				CurrentCamera.CFrame = kfStart.CFrame:Lerp(kfEnd.CFrame, smoothAlpha)
+			end
+
+			CurrentCamera.CFrame = kfEnd.CFrame
+
+			if kfEnd.StopTime > 0 then
+				local pauseTime = kfEnd.StopTime
+				local pauseElapsed = 0
+				while pauseElapsed < pauseTime do
+					if State ~= "PLAYBACK" then
+						return
+					end
+					local dt = RunService.RenderStepped:Wait()
+					pauseElapsed += dt
+				end
+			end
+		end
+
+		StopCinematic()
+	end)
+end
+
+UIControllers.BtnPlay.Activated:Connect(StartCinematic)
+UIControllers.BtnStop.Activated:Connect(StopCinematic)
+
+--------------------------------------------------------------------------------
+-- CLEANUP
+--------------------------------------------------------------------------------
+LocalPlayer.CharacterRemoving:Connect(function()
+	SetTouchControlsVisible(true)
+	if State == "PLAYBACK" then
+		StopCinematic()
+	elseif State == "POV_EDIT" then
+		ExitPOVMode()
+	end
+end)
